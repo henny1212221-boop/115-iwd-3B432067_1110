@@ -1,0 +1,318 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>YouBike 即時車位（臺中）</title>
+    <!-- 引入 Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700&display=swap');
+        body { font-family: 'Noto Sans TC', sans-serif; }
+    </style>
+</head>
+<body class="bg-slate-50 min-h-screen flex flex-col">
+
+    <!-- 頂部導覽列 -->
+    <header class="bg-emerald-600 text-white shadow-md">
+        <div class="max-w-7xl mx-auto px-4 py-4 flex flex-col sm:flex-row justify-between items-center gap-3">
+            <div class="flex items-center gap-2">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-8 w-8 text-emerald-200" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z" />
+                </svg>
+                <h1 class="text-2xl font-bold tracking-wider">YouBike 即時車位（臺中）</h1>
+            </div>
+            <!-- 重新抓取資料按鈕 -->
+            <button onclick="fetchYouBikeData()" class="bg-emerald-700 hover:bg-emerald-800 text-white px-4 py-2 rounded-lg text-xs font-medium transition flex items-center gap-1.5 shadow-sm active:scale-95">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                </svg>
+                重新整理資料
+            </button>
+        </div>
+    </header>
+
+    <!-- 主要內容區 -->
+    <main class="max-w-7xl mx-auto px-4 py-6 flex-grow w-full">
+        
+        <!-- 搜尋與互動控制面板 -->
+        <div class="bg-white p-4 sm:p-6 rounded-xl shadow-sm border border-slate-200 mb-6 space-y-4">
+            <div class="flex flex-col lg:flex-row gap-4 justify-between items-center">
+                
+                <!-- 站名關鍵字輸入與搜尋按鈕 -->
+                <div class="w-full lg:w-auto flex flex-grow gap-2 max-w-xl">
+                    <div class="relative flex-grow">
+                        <span class="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none text-slate-400">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                            </svg>
+                        </span>
+                        <input 
+                            type="text" 
+                            id="search-input" 
+                            value="勤益" 
+                            placeholder="輸入站名關鍵字（例如：勤益、火車站）" 
+                            class="w-full pl-10 pr-4 py-2.5 bg-slate-50 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:bg-white transition"
+                            onkeydown="if(event.key==='Enter') filterAndRenderData()"
+                        >
+                    </div>
+                    <button onclick="filterAndRenderData()" class="bg-emerald-600 hover:bg-emerald-700 text-white font-medium px-5 py-2.5 rounded-lg text-sm transition shadow-sm whitespace-nowrap">
+                        搜尋
+                    </button>
+                </div>
+
+                <!-- 排序方式與篩選 -->
+                <div class="flex flex-wrap items-center gap-4 w-full lg:w-auto justify-between lg:justify-end">
+                    <!-- 只看有車可借勾選框 -->
+                    <label class="flex items-center gap-2 cursor-pointer select-none bg-slate-50 px-3 py-2 rounded-lg border border-slate-200 hover:bg-slate-100 transition">
+                        <input 
+                            type="checkbox" 
+                            id="has-bike-checkbox" 
+                            class="w-4 h-4 text-emerald-600 rounded focus:ring-emerald-500 border-slate-300"
+                            onchange="filterAndRenderData()"
+                        >
+                        <span class="text-sm font-medium text-slate-700">只看有車可借</span>
+                    </label>
+
+                    <!-- 排序選單 -->
+                    <div class="flex items-center gap-2">
+                        <span class="text-xs text-slate-500 font-medium whitespace-nowrap">排序：</span>
+                        <select 
+                            id="sort-select" 
+                            class="bg-slate-50 border border-slate-300 rounded-lg px-3 py-2 text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                            onchange="filterAndRenderData()"
+                        >
+                            <option value="name">依站名</option>
+                            <option value="sbi-desc">可借車輛多到少</option>
+                        </select>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 結果統計提示 -->
+            <div class="flex justify-between items-center text-xs text-slate-500 pt-2 border-t border-slate-100">
+                <span id="result-info">準備載入資料...</span>
+                <span>註：最多顯示 12 筆站點</span>
+            </div>
+        </div>
+
+        <!-- 狀態顯示區域（載入中 / 錯誤訊息 / 找不到站點） -->
+        <div id="status-container" class="py-16 text-center">
+            <div class="inline-block animate-spin rounded-full h-10 w-10 border-4 border-emerald-500 border-t-transparent mb-3"></div>
+            <p class="text-slate-600 font-medium text-lg">資料載入中，請稍候...</p>
+        </div>
+
+        <!-- 站點卡片列表網格 -->
+        <div id="station-grid" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 hidden"></div>
+
+    </main>
+
+    <!-- 頁面底部 -->
+    <footer class="bg-white border-t border-slate-200 py-6 mt-12 text-center text-xs text-slate-500 space-y-1">
+        <p>資料來源：臺中市政府交通局，<a href="https://datacenter.taichung.gov.tw/" target="_blank" class="text-emerald-600 hover:underline font-medium">政府資料開放平臺</a></p>
+        <p>授權方式：政府資料開放授權條款第 1 版</p>
+    </footer>
+
+    <!-- JavaScript 核心邏輯 -->
+    <script>
+        const API_URL = 'https://newdatacenter.taichung.gov.tw/api/v1/no-auth/resource.download?rid=bf0fee92-9980-418c-a095-2eacf2eb49f6';
+        let allStations = [];
+
+        // 頁面載入時自動執行
+        window.addEventListener('DOMContentLoaded', () => {
+            fetchYouBikeData();
+        });
+
+        // 1. 透過 async/await 與 fetch 呼叫 API
+        async function fetchYouBikeData() {
+            const statusContainer = document.getElementById('status-container');
+            const stationGrid = document.getElementById('station-grid');
+
+            // 顯示載入中狀態
+            statusContainer.classList.remove('hidden');
+            statusContainer.innerHTML = `
+                <div class="inline-block animate-spin rounded-full h-10 w-10 border-4 border-emerald-500 border-t-transparent mb-3"></div>
+                <p class="text-slate-600 font-medium text-lg">資料載入中，請稍候...</p>
+            `;
+            stationGrid.classList.add('hidden');
+
+            try {
+                const response = await fetch(API_URL);
+                if (!response.ok) {
+                    throw new Error(`網路連線失敗，狀態碼：${response.status}`);
+                }
+
+                const data = await response.json();
+
+                // 解析資料陣列
+                let rawList = [];
+                if (Array.isArray(data)) {
+                    rawList = data;
+                } else if (data.result && Array.isArray(data.result)) {
+                    rawList = data.result;
+                } else if (data.data && Array.isArray(data.data)) {
+                    rawList = data.data;
+                } else {
+                    const found = Object.values(data).find(val => Array.isArray(val));
+                    rawList = found || [];
+                }
+
+                // 2. 欄位處理與資料清洗 (含 Number() 轉型與去除 YouBike2.0_ 字串)
+                allStations = rawList.map(item => {
+                    let rawSna = item.sna || item.stationName || '';
+                    let cleanSna = rawSna.replace(/^YouBike2\.0_/, ''); // 移除前綴
+
+                    return {
+                        sna: cleanSna,
+                        sarea: item.sarea || '未知行政區',
+                        ar: item.ar || '無詳細地址',
+                        tot: Number(item.tot || 0),
+                        sbi: Number(item.sbi || 0),
+                        bemp: Number(item.bemp || 0),
+                        mday: item.mday || ''
+                    };
+                });
+
+                statusContainer.classList.add('hidden');
+                stationGrid.classList.remove('hidden');
+
+                // 執行篩選與渲染
+                filterAndRenderData();
+
+            } catch (error) {
+                console.error("Fetch Error:", error);
+                // 5. 失敗顯示紅色錯誤訊息與重試按鈕
+                statusContainer.classList.remove('hidden');
+                statusContainer.innerHTML = `
+                    <div class="max-w-md mx-auto bg-red-50 border border-red-200 p-6 rounded-xl shadow-sm">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-10 w-10 text-red-500 mx-auto mb-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                        </svg>
+                        <p class="text-red-600 font-bold text-lg mb-1">無法載入 YouBike 資料</p>
+                        <p class="text-red-500 text-sm mb-4">${error.message}</p>
+                        <button onclick="fetchYouBikeData()" class="bg-red-600 hover:bg-red-700 text-white font-medium px-4 py-2 rounded-lg text-sm transition shadow-sm">
+                            點此重新整理
+                        </button>
+                    </div>
+                `;
+                stationGrid.classList.add('hidden');
+            }
+        }
+
+        // 時間格式化工具：YYYYMMDDhhmmss -> YYYY/MM/DD hh:mm:ss
+        function formatMday(mdayStr) {
+            if (!mdayStr || mdayStr.length !== 14) return mdayStr || '未知時間';
+            const y = mdayStr.substring(0, 4);
+            const m = mdayStr.substring(4, 6);
+            const d = mdayStr.substring(6, 8);
+            const hh = mdayStr.substring(8, 10);
+            const mm = mdayStr.substring(10, 12);
+            const ss = mdayStr.substring(12, 14);
+            return `${y}/${m}/${d} ${hh}:${mm}:${ss}`;
+        }
+
+        // 4. 互動與篩選、排序、上限 12 站
+        function filterAndRenderData() {
+            const keyword = document.getElementById('search-input').value.trim().toLowerCase();
+            const onlyHasBike = document.getElementById('has-bike-checkbox').checked;
+            const sortType = document.getElementById('sort-select').value;
+
+            // 步驟 A：過濾
+            let filtered = allStations.filter(station => {
+                const matchKeyword = station.sna.toLowerCase().includes(keyword) || station.ar.toLowerCase().includes(keyword) || station.sarea.toLowerCase().includes(keyword);
+                const matchBike = onlyHasBike ? station.sbi > 0 : true;
+                return matchKeyword && matchBike;
+            });
+
+            // 步驟 B：排序 (使用 Number() 確保數值正確比較)
+            if (sortType === 'name') {
+                filtered.sort((a, b) => a.sna.localeCompare(b.sna, 'zh-Hant'));
+            } else if (sortType === 'sbi-desc') {
+                filtered.sort((a, b) => Number(b.sbi) - Number(a.sbi));
+            }
+
+            const totalMatched = filtered.length;
+            const limitedList = filtered.slice(0, 12); // 最多顯示 12 站
+
+            document.getElementById('result-info').innerText = `找到 ${totalMatched} 個符合站點，目前顯示前 ${limitedList.length} 筆`;
+
+            const grid = document.getElementById('station-grid');
+            const statusContainer = document.getElementById('status-container');
+
+            // 5. 找不到站名時顯示提示
+            if (totalMatched === 0) {
+                statusContainer.classList.remove('hidden');
+                statusContainer.innerHTML = `
+                    <div class="py-8 text-slate-500">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-12 w-12 mx-auto mb-2 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.172 16.172a4 4 0 015.656 0M9 10h.01M15 10h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                        </svg>
+                        <p class="text-lg font-medium text-slate-700">找不到符合條件的 YouBike 站點</p>
+                        <p class="text-sm text-slate-400 mt-1">請嘗試輸入其他關鍵字或取消「只看有車可借」篩選條件。</p>
+                    </div>
+                `;
+                grid.classList.add('hidden');
+                return;
+            }
+
+            statusContainer.classList.add('hidden');
+            grid.classList.remove('hidden');
+
+            // 3. 畫面卡片渲染
+            grid.innerHTML = limitedList.map(station => {
+                const sbiColor = station.sbi === 0 ? 'text-red-600' : 'text-emerald-600';
+                const formattedTime = formatMday(station.mday);
+
+                return `
+                    <div class="bg-white rounded-xl p-5 shadow-sm border border-slate-200 hover:shadow-md transition flex flex-col justify-between">
+                        <div>
+                            <!-- 站名與行政區 -->
+                            <div class="flex items-start justify-between gap-2 mb-2">
+                                <h2 class="font-bold text-slate-800 text-base leading-snug">${escapeHtml(station.sna)}</h2>
+                                <span class="text-xs bg-emerald-50 text-emerald-700 px-2 py-0.5 rounded-full font-medium whitespace-nowrap border border-emerald-200">${escapeHtml(station.sarea)}</span>
+                            </div>
+                            
+                            <!-- 地址 -->
+                            <p class="text-xs text-slate-500 mb-4 flex items-center gap-1">
+                                <svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5 text-slate-400 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+                                </svg>
+                                <span class="truncate">${escapeHtml(station.ar)}</span>
+                            </p>
+
+                            <!-- 可借車輛與可還空位數據方塊 -->
+                            <div class="grid grid-cols-2 gap-3 mb-4 bg-slate-50 p-3 rounded-lg border border-slate-100">
+                                <div class="text-center border-r border-slate-200">
+                                    <div class="text-xs text-slate-500 mb-1 font-medium">可借車輛</div>
+                                    <div class="text-3xl font-bold ${sbiColor}">${station.sbi}</div>
+                                </div>
+                                <div class="text-center">
+                                    <div class="text-xs text-slate-500 mb-1 font-medium">可還空位</div>
+                                    <div class="text-3xl font-bold text-blue-600">${station.bemp}</div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- 底部總車位與更新時間 -->
+                        <div class="pt-3 border-t border-slate-100 flex items-center justify-between text-xs text-slate-400">
+                            <span>總車位：${station.tot}</span>
+                            <span title="更新時間">更新：${formattedTime}</span>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        // 防 XSS 轉義
+        function escapeHtml(str) {
+            return String(str)
+                .replace(/&/g, "&amp;")
+                .replace(/</g, "&lt;")
+                .replace(/>/g, "&gt;")
+                .replace(/"/g, "&quot;")
+                .replace(/'/g, "&#039;");
+        }
+    </script>
+</body>
+</html>
